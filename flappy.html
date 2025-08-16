@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flappy Bird</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  html, body { 
+    width: 100%;
+    height: 100%;
+    overflow: hidden; 
+    background: #70C5CE;
+    font-family: Arial, sans-serif;
+  }
+  canvas { 
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #70C5CE;
+    border: 3px solid #4A90A4;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.3);
+  }
+  #credits {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: white;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background: rgba(0,0,0,0.7);
+    padding: 20px;
+    border-radius: 15px;
+    border: 2px solid #4A90A4;
+    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    width: 180px;
+  }
+  #credits h3 {
+    margin: 0 0 15px 0;
+    font-size: 18px;
+    color: #FFD700;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+  }
+  #credits p {
+    margin: 8px 0;
+    font-size: 14px;
+    font-weight: bold;
+    color: #FFFFFF;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+  }
+  #credits .subtitle {
+    font-size: 12px;
+    color: #B0E0E6;
+    font-weight: normal;
+    margin: 5px 0 15px 0;
+  }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="credits">
+  <h3>🎮 CRIADORES</h3>
+  <p class="subtitle">Desenvolvido por</p>
+  <p>👨‍💻 Juan Pablo</p>
+  <p>👨‍💻 Juan Miguel</p>
+  <p class="subtitle">-----Criadores-----</p>
+</div>
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+// Tamanho base do jogo
+const GAME_WIDTH = 400;
+const GAME_HEIGHT = 600;
+canvas.width = GAME_WIDTH;
+canvas.height = GAME_HEIGHT;
+
+// Escalar canvas para tela cheia mantendo proporção
+function scaleCanvas(){
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+    const scale = Math.min(windowWidth / GAME_WIDTH, windowHeight / GAME_HEIGHT);
+    
+    const scaledWidth = GAME_WIDTH * scale;
+    const scaledHeight = GAME_HEIGHT * scale;
+    
+    canvas.style.width = scaledWidth + 'px';
+    canvas.style.height = scaledHeight + 'px';
+    
+    // Centralizar na tela
+    const left = (windowWidth - scaledWidth) / 2;
+    const top = (windowHeight - scaledHeight) / 2;
+    
+    canvas.style.position = 'absolute';
+    canvas.style.left = left + 'px';
+    canvas.style.top = top + 'px';
+    canvas.style.transform = 'none';
+    
+    // Atualizar posição dos créditos
+    const credits = document.getElementById('credits');
+    credits.style.right = Math.max(10, (windowWidth - left - scaledWidth - 200)) + 'px';
+    credits.style.top = top + 'px';
+    
+    // Preencher o fundo atrás do canvas se necessário
+    document.body.style.background = '#70C5CE';
+}
+window.addEventListener("resize", scaleCanvas);
+window.addEventListener("load", scaleCanvas);
+scaleCanvas();
+
+// Cores
+const AMARELO_PASSARO="#FFCC4D";
+const LARANJA_BICO="#FF5555";
+const BRANCO="#FFFFFF";
+const PRETO="#000000";
+const VERDE_CLARO="#009E60";
+const VERDE_ESCURO="#00752C";
+const VERDE_CHAO="#009E60";
+const BEGE_CHAO="#DED895";
+const MARROM_CHAO="#C09853";
+
+// Tamanhos
+const PASSARO_LARGURA = 34;
+const PASSARO_ALTURA = 24;
+const ESPACO_CANOS = 120;
+const LARGURA_CANO = 65;
+const ALTURA_CHAO = 112;
+const GRAVIDADE = 0.5;
+const FORCA_PULO = -8;
+
+// Perguntas
+const perguntas = [
+    { pergunta:"Qual pronome substitui 'Maria e João'?", alternativas:["A: Nós","B: Eles","C: Elas","D: Ele"], correta:"B" },
+    { pergunta:"Qual pronome substitui 'o livro'?", alternativas:["A: Ele","B: Ela","C: Eles","D: Elas"], correta:"A" },
+    { pergunta:"Qual pronome substitui 'as meninas'?", alternativas:["A: Elas","B: Eles","C: Ela","D: Ele"], correta:"A" },
+    { pergunta:"Qual pronome substitui 'João e eu'?", alternativas:["A: Nós","B: Eles","C: Elas","D: Ele"], correta:"A" },
+    { pergunta:"Qual pronome substitui 'o carro'?", alternativas:["A: Ela","B: Ele","C: Nós","D: Eles"], correta:"B" },
+];
+let perguntaIndex = 0;
+let perguntaAtiva = false;
+let perguntaAtual = null;
+
+// Controle mouse
+let mouseX = 0, mouseY = 0;
+canvas.addEventListener("mousemove", e => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = GAME_WIDTH / rect.width;
+    const scaleY = GAME_HEIGHT / rect.height;
+    mouseX = (e.clientX - rect.left) * scaleX;
+    mouseY = (e.clientY - rect.top) * scaleY;
+});
+
+canvas.addEventListener("click", e => {
+    if(perguntaAtiva && perguntaAtual){
+        const startX = 50; 
+        let startY = GAME_HEIGHT * 0.5; 
+        const largura = 300; 
+        const altura = 50;
+        
+        for(let i = 0; i < 4; i++){
+            if(mouseX > startX && mouseX < startX + largura && 
+               mouseY > startY + i * 60 && mouseY < startY + i * 60 + altura){
+                const letra = ["A","B","C","D"][i];
+                if(letra === perguntaAtual.correta){
+                    perguntaAtiva = false;
+                    perguntaAtual = null;
+                    reiniciarJogo(true);
+                } else {
+                    perguntaAtiva = false;
+                    perguntaAtual = null;
+                    gameOver = true;
+                }
+            }
+        }
+    } else if(!iniciado && !gameOver) {
+        iniciado = true;
+    } else if(!gameOver && !perguntaAtiva) {
+        passaro.pular();
+    }
+});
+
+// Classes
+class Passaro{
+    constructor(x, y){
+        this.x = x; 
+        this.y = y; 
+        this.velocidade_y = 0;
+        this.angulo = 0; 
+        this.frame = 0; 
+        this.tick_frame = 0;
+    }
+    
+    pular(){ 
+        this.velocidade_y = FORCA_PULO; 
+    }
+    
+    atualizar(){
+        this.velocidade_y += GRAVIDADE;
+        this.y += this.velocidade_y;
+        this.angulo = this.velocidade_y < 0 ? Math.min(25, -this.velocidade_y * 3) : Math.max(-90, -this.velocidade_y * 2);
+        this.tick_frame++; 
+        if(this.tick_frame >= 5){
+            this.tick_frame = 0; 
+            this.frame = (this.frame + 1) % 3;
+        }
+    }
+    
+    desenhar(){
+        const cx = this.x, cy = this.y;
+        ctx.fillStyle = AMARELO_PASSARO;
+        ctx.beginPath(); 
+        ctx.ellipse(cx, cy, PASSARO_LARGURA/2, PASSARO_ALTURA/2, 0, 0, Math.PI * 2); 
+        ctx.fill();
+        ctx.strokeStyle = PRETO; 
+        ctx.stroke();
+        
+        let asa_offset = [-2, 0, 2][this.frame];
+        ctx.fillStyle = "#FFC243";
+        ctx.beginPath(); 
+        ctx.ellipse(cx, cy + asa_offset + 2, PASSARO_LARGURA * 0.35, PASSARO_ALTURA * 0.35, 0, 0, Math.PI * 2); 
+        ctx.fill();
+        ctx.strokeStyle = PRETO; 
+        ctx.stroke();
+        
+        ctx.fillStyle = BRANCO; 
+        ctx.beginPath(); 
+        ctx.arc(cx + 6, cy - 6, 8, 0, Math.PI * 2); 
+        ctx.fill();
+        ctx.strokeStyle = PRETO; 
+        ctx.stroke();
+        
+        ctx.fillStyle = PRETO; 
+        ctx.beginPath(); 
+        ctx.arc(cx + 8, cy - 6, 4, 0, Math.PI * 2); 
+        ctx.fill();
+        
+        ctx.fillStyle = LARANJA_BICO;
+        ctx.beginPath(); 
+        ctx.moveTo(cx + PASSARO_LARGURA/2, cy - 2);
+        ctx.lineTo(cx + PASSARO_LARGURA/2 + 12, cy);
+        ctx.lineTo(cx + PASSARO_LARGURA/2, cy + 4); 
+        ctx.closePath(); 
+        ctx.fill();
+        ctx.strokeStyle = PRETO; 
+        ctx.stroke();
+    }
+    
+    getRect(){ 
+        return {
+            x: this.x - PASSARO_LARGURA/2, 
+            y: this.y - PASSARO_ALTURA/2, 
+            w: PASSARO_LARGURA, 
+            h: PASSARO_ALTURA
+        }; 
+    }
+}
+
+class Cano{
+    constructor(x, vel){ 
+        this.x = x; 
+        this.velocidade = vel; 
+        this.altura_gap = Math.random() * (GAME_HEIGHT - ESPACO_CANOS - ALTURA_CHAO - 100) + 100; 
+        this.largura = LARGURA_CANO; 
+        this.passou = false; 
+    }
+    
+    atualizar(){ 
+        this.x += this.velocidade; 
+    }
+    
+    desenhar(){
+        const superior = this.altura_gap - ESPACO_CANOS/2;
+        const inferior = this.altura_gap + ESPACO_CANOS/2;
+        
+        // Cano superior - corpo
+        ctx.fillStyle = VERDE_CLARO; 
+        ctx.fillRect(this.x, 0, this.largura, superior - 26);
+        
+        // Textura do cano superior
+        ctx.fillStyle = VERDE_ESCURO;
+        for(let y = 0; y < superior - 26; y += 15) {
+            ctx.fillRect(this.x + 5, y, 2, 10);
+            ctx.fillRect(this.x + this.largura - 7, y, 2, 10);
+        }
+        for(let x = this.x; x < this.x + this.largura; x += 20) {
+            ctx.fillRect(x, superior - 30, 15, 2);
+        }
+        
+        ctx.strokeStyle = VERDE_ESCURO; 
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x, 0, this.largura, superior - 26);
+        
+        // Borda do cano superior
+        ctx.fillStyle = VERDE_ESCURO; 
+        ctx.fillRect(this.x - 6, superior - 26, this.largura + 12, 26);
+        
+        // Detalhes da borda superior
+        ctx.fillStyle = "#007A3D";
+        ctx.fillRect(this.x - 4, superior - 24, this.largura + 8, 4);
+        ctx.fillRect(this.x - 4, superior - 6, this.largura + 8, 4);
+        
+        ctx.strokeStyle = "#005A2B"; 
+        ctx.strokeRect(this.x - 6, superior - 26, this.largura + 12, 26);
+        
+        // Cano inferior - borda
+        ctx.fillStyle = VERDE_ESCURO; 
+        ctx.fillRect(this.x - 6, inferior, this.largura + 12, 26);
+        
+        // Detalhes da borda inferior
+        ctx.fillStyle = "#007A3D";
+        ctx.fillRect(this.x - 4, inferior + 2, this.largura + 8, 4);
+        ctx.fillRect(this.x - 4, inferior + 18, this.largura + 8, 4);
+        
+        ctx.strokeStyle = "#005A2B"; 
+        ctx.strokeRect(this.x - 6, inferior, this.largura + 12, 26);
+        
+        // Cano inferior - corpo
+        const alturaCorpoInferior = GAME_HEIGHT - inferior - 26 - ALTURA_CHAO;
+        ctx.fillStyle = VERDE_CLARO; 
+        ctx.fillRect(this.x, inferior + 26, this.largura, alturaCorpoInferior);
+        
+        // Textura do cano inferior
+        ctx.fillStyle = VERDE_ESCURO;
+        for(let y = inferior + 26; y < inferior + 26 + alturaCorpoInferior; y += 15) {
+            ctx.fillRect(this.x + 5, y, 2, 10);
+            ctx.fillRect(this.x + this.largura - 7, y, 2, 10);
+        }
+        for(let x = this.x; x < this.x + this.largura; x += 20) {
+            ctx.fillRect(x, inferior + 30, 15, 2);
+        }
+        
+        ctx.strokeStyle = VERDE_ESCURO; 
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x, inferior + 26, this.largura, alturaCorpoInferior);
+        
+        ctx.lineWidth = 1; // Resetar linha
+    }
+    
+    colidiu(passaro){
+        const p = passaro.getRect();
+        const superior = this.altura_gap - ESPACO_CANOS/2;
+        const inferior = this.altura_gap + ESPACO_CANOS/2;
+        const canoS = {x: this.x, y: 0, w: this.largura, h: superior};
+        const canoI = {x: this.x, y: inferior, w: this.largura, h: GAME_HEIGHT - inferior - ALTURA_CHAO};
+        return rectColidiu(p, canoS) || rectColidiu(p, canoI);
+    }
+    
+    passouPassaro(passaro){
+        if(!this.passou && this.x + this.largura < passaro.x){ 
+            this.passou = true; 
+            return true; 
+        }
+        return false;
+    }
+}
+
+class Chao{
+    constructor(){ 
+        this.x1 = 0; 
+        this.x2 = GAME_WIDTH; 
+        this.vel = -3; 
+    }
+    
+    atualizar(){ 
+        this.x1 += this.vel; 
+        this.x2 += this.vel; 
+        if(this.x1 <= -GAME_WIDTH) this.x1 = GAME_WIDTH; 
+        if(this.x2 <= -GAME_WIDTH) this.x2 = GAME_WIDTH; 
+    }
+    
+    desenhar(){
+        // Base do chão
+        ctx.fillStyle = BEGE_CHAO; 
+        ctx.fillRect(0, GAME_HEIGHT - ALTURA_CHAO, GAME_WIDTH, ALTURA_CHAO);
+        
+        for(let x of [this.x1, this.x2]){
+            // Grama superior
+            ctx.fillStyle = VERDE_CHAO; 
+            ctx.fillRect(x, GAME_HEIGHT - ALTURA_CHAO, GAME_WIDTH, 20);
+            
+            // Detalhes da grama
+            ctx.fillStyle = "#00B366";
+            for(let i = 0; i < GAME_WIDTH; i += 8) {
+                ctx.fillRect(x + i, GAME_HEIGHT - ALTURA_CHAO + 2, 2, 6);
+                ctx.fillRect(x + i + 4, GAME_HEIGHT - ALTURA_CHAO + 5, 2, 8);
+            }
+            
+            // Terra com textura
+            ctx.fillStyle = "#B8A76F";
+            for(let i = 0; i < GAME_WIDTH; i += 25) {
+                for(let j = 20; j < ALTURA_CHAO; j += 20) {
+                    ctx.fillRect(x + i + 2, GAME_HEIGHT - ALTURA_CHAO + j + 2, 8, 6);
+                    ctx.fillRect(x + i + 12, GAME_HEIGHT - ALTURA_CHAO + j + 8, 6, 8);
+                }
+            }
+            
+            // Pedras pequenas
+            ctx.fillStyle = "#8B7355";
+            for(let i = 10; i < GAME_WIDTH; i += 35) {
+                for(let j = 30; j < ALTURA_CHAO - 10; j += 25) {
+                    ctx.beginPath();
+                    ctx.arc(x + i, GAME_HEIGHT - ALTURA_CHAO + j, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            
+            // Linhas de camadas do solo
+            ctx.strokeStyle = MARROM_CHAO; 
+            ctx.lineWidth = 2;
+            for(let i = 0; i < GAME_WIDTH; i += 40){
+                ctx.beginPath();
+                ctx.moveTo(x + i, GAME_HEIGHT - ALTURA_CHAO + 20);
+                ctx.lineTo(x + i, GAME_HEIGHT);
+                ctx.stroke();
+            }
+            
+            // Linhas horizontais para camadas
+            for(let j = 40; j < ALTURA_CHAO; j += 20) {
+                ctx.beginPath();
+                ctx.moveTo(x, GAME_HEIGHT - ALTURA_CHAO + j);
+                ctx.lineTo(x + GAME_WIDTH, GAME_HEIGHT - ALTURA_CHAO + j);
+                ctx.stroke();
+            }
+        }
+        
+        ctx.lineWidth = 1; // Resetar linha
+    }
+}
+
+function rectColidiu(r1, r2){
+    return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x && r1.y < r2.y + r2.h && r1.y + r1.h > r2.y;
+}
+
+// Variáveis do jogo
+let passaro, canos = [], chao, pontuacao = 0, gameOver = false, contadorCanos = 0, iniciado = false;
+
+function reiniciarJogo(vidaExtra = false){
+    passaro = new Passaro(GAME_WIDTH * 0.1, GAME_HEIGHT/2);
+    canos = []; 
+    chao = new Chao(); 
+    contadorCanos = 0;
+    if(!vidaExtra) pontuacao = 0;
+    gameOver = false; 
+    iniciado = false;
+}
+
+// Pergunta
+function gerarPergunta(){ 
+    if(perguntaIndex >= perguntas.length) perguntaIndex = 0; 
+    perguntaAtual = perguntas[perguntaIndex++]; 
+    perguntaAtiva = true; 
+}
+
+function atualizar(){
+    if(iniciado && !gameOver && !perguntaAtiva){
+        passaro.atualizar();
+        chao.atualizar();
+        
+        if(contadorCanos <= 0){ 
+            canos.push(new Cano(GAME_WIDTH, -3)); 
+            contadorCanos = 120; 
+        } else { 
+            contadorCanos--; 
+        }
+        
+        for(let c of canos){ c.atualizar(); }
+        canos = canos.filter(c => c.x + c.largura > 0);
+        
+        for(let c of canos){ 
+            if(c.passouPassaro(passaro)) pontuacao++; 
+        }
+        
+        if(passaro.y <= 0 || passaro.y >= GAME_HEIGHT - ALTURA_CHAO - PASSARO_ALTURA/2 || 
+           canos.some(c => c.colidiu(passaro))){
+            gameOver = true; 
+            gerarPergunta();
+        }
+    }
+}
+
+function desenhar(){
+    ctx.fillStyle = "#70C5CE"; 
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    
+    for(let c of canos){ c.desenhar(); }
+    chao.desenhar();
+    passaro.desenhar();
+    
+    ctx.fillStyle = BRANCO; 
+    ctx.font = "50px Arial"; 
+    ctx.textAlign = "center";
+    ctx.fillText(pontuacao, GAME_WIDTH/2, 100);
+    
+    if(!iniciado && !gameOver){
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        ctx.fillStyle = BRANCO;
+        ctx.font = "30px Arial";
+        ctx.fillText("Clique para começar", GAME_WIDTH/2, GAME_HEIGHT/2);
+    }
+    
+    if(perguntaAtiva) desenharPergunta();
+}
+
+function desenharPergunta(){
+    ctx.fillStyle = "rgba(0,0,0,0.7)"; 
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    ctx.fillStyle = BRANCO; 
+    ctx.font = "20px Arial";
+    ctx.textAlign = "left";
+    
+    const linhas = perguntaAtual.pergunta.split("\n");
+    for(let i = 0; i < linhas.length; i++) {
+        ctx.fillText(linhas[i], 50, GAME_HEIGHT * 0.4 + i * 25);
+    }
+    
+    ctx.font = "18px Arial";
+    for(let i = 0; i < 4; i++){
+        const x = 50, y = GAME_HEIGHT * 0.5 + i * 60, w = 300, h = 50;
+        
+        if(mouseX > x && mouseX < x + w && mouseY > y && mouseY < y + h) {
+            ctx.fillStyle = "#FFD700";
+        } else {
+            ctx.fillStyle = BRANCO;
+        }
+        
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = PRETO; 
+        ctx.strokeRect(x, y, w, h);
+        ctx.fillStyle = PRETO; 
+        ctx.fillText(perguntaAtual.alternativas[i], x + 10, y + 35);
+    }
+}
+
+function gameLoop(){
+    atualizar();
+    desenhar();
+    requestAnimationFrame(gameLoop);
+}
+
+document.addEventListener("keydown", e => {
+    if(e.code === "Space"){ 
+        e.preventDefault();
+        if(!iniciado && !gameOver) {
+            iniciado = true;
+        } else if(!gameOver && !perguntaAtiva) {
+            passaro.pular();
+        }
+    }
+});
+
+reiniciarJogo();
+gameLoop();
+
+</script>
+</body>
+</html>
